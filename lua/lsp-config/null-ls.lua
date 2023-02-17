@@ -1,32 +1,81 @@
-local status, null_ls = pcall(require, "null-ls")
-if (not status) then return end
+local null_ls_status_ok, null_ls = pcall(require, "null-ls")
+if not null_ls_status_ok then
+  return
+end
 
-local diagnostics = null_ls.builtins.diagnostics
+-- https://github.com/jose-elias-alvarez/null-ls.nvim/tree/main/lua/null-ls/builtins/formatting
 local formatting = null_ls.builtins.formatting
-local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
-local augroup_format = vim.api.nvim_create_augroup("Format", { clear = true })
+-- https://github.com/jose-elias-alvarez/null-ls.nvim/tree/main/lua/null-ls/builtins/diagnostics
+local diagnostics = null_ls.builtins.diagnostics
+local code_actions = null_ls.builtins.code_actions
 
-null_ls.setup({
-  sources = {
-    null_ls.builtins.diagnostics.eslint_d.with({
-      diagnostics_format = '[eslint]\n #{m}\n(#{c})'
-    }),
-    null_ls.builtins.diagnostics.fish,
-    formatting.prettier,
+-- https://github.com/prettier-solidity/prettier-plugin-solidity
+-- npm install --save-dev prettier prettier-plugin-solidity
+null_ls.setup {
+  debug = false,
+  sources = {    
+    formatting.prettier.with {
+      extra_filetypes = { 
+        "toml", 
+        "solidity", 
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact",
+        "vue",
+        "css",
+        "scss",
+        "less",
+        "html",
+        "json",
+        "jsonc",
+        "yaml",
+        "markdown",
+        "markdown.mdx",
+        "graphql",
+        "handlebars", },
+      extra_args = {"--double-quote", "--jsx-double-quote" },
+    },
+    formatting.black.with { extra_args = { "--fast" } },
+    formatting.stylua,
+    formatting.shfmt,
+    -- formatting.google_java_format,
+    -- diagnostics.flake8,
+    diagnostics.eslint,
+    code_actions.eslint, 
+    -- code_actions.xo,
+    -- diagnostics.tsc,
+    diagnostics.shellcheck,
   },
-  on_attach = function(client, bufnr)
-    if client.server_capabilities.documentFormattingProvider then
-      vim.api.nvim_clear_autocmds { buffer = bufnr, group = augroup_format }
-      vim.api.nvim_create_autocmd("BufWritePre", {
-        group = augroup_format,
-        -- buffer = 0,
-        callback = function()
-          vim.lsp.buf.format()
-        end
-      })
-    end
-  end,
-})
+}
 
--- Auto commands
-vim.cmd([[ autocmd BufWritePre <buffer> lua vim.lsp.buf.formatting_sync() ]])
+local unwrap = {
+  method = null_ls.methods.DIAGNOSTICS,
+  filetypes = { "rust" },
+  generator = {
+    fn = function(params)
+      local diagnostics = {}
+      -- sources have access to a params object
+      -- containing info about the current file and editor state
+      for i, line in ipairs(params.content) do
+        local col, end_col = line:find "unwrap()"
+        if col and end_col then
+          -- null-ls fills in undefined positions
+          -- and converts source diagnostics into the required format
+          table.insert(diagnostics, {
+            row = i,
+            col = col,
+            end_col = end_col,
+            source = "unwrap",
+            message = "hey " .. os.getenv("USER") .. ", don't forget to handle this" ,
+            severity = 2,
+          })
+        end
+      end
+      return diagnostics
+    end,
+  },
+}
+
+null_ls.register(unwrap)
+
